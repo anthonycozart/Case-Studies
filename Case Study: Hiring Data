@@ -1,0 +1,213 @@
+# Examining Hiring Data, Updated February 2016
+
+# Standard imports for numpy, pandas, plotting
+import numpy as np
+import pandas as pd
+from pandas import Series,DataFrame,to_datetime
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style('whitegrid')
+%matplotlib inline
+
+# import data (from csv file)
+data = pd.read_csv('hiring_data.csv')
+dframe = DataFrame(data)
+
+#### Clean and format data
+
+recruiter_id = []
+for row in dframe['Application_Recruiter_Name']:
+    recruiter_id.append(row.split(' ')[1])
+dframe['Recruiter_ID'] = recruiter_id
+
+dframe['Application_Create_Date'] = to_datetime(dframe['Application_Create_Date'])
+dframe['Offer_Accepted_Date'] = to_datetime(dframe['Offer_Accepted_Date'])
+
+dframe['Month_Created'] = dframe['Application_Create_Date'].values.astype('datetime64[M]')
+dframe['Month_Accepted'] = dframe['Offer_Accepted_Date'].values.astype('datetime64[M]')
+
+# create basic factor plots
+
+factorplot1 = sns.factorplot('Application_Location_Site (Bay Area)',data=dframe,kind='count')
+factorplot1.savefig('hiring_data_factorplot1.pdf')
+
+factorplot2 = sns.factorplot('Candidate_Source',data=dframe,kind='count',size=6)
+factorplot2.savefig('hiring_data_factorplot2.pdf')
+
+############ First question ############
+# How many offers were accepted in December? How does this vary by Application_Type? 
+
+december_offers_accepted = dframe.groupby(['Application_Type','Month_Accepted'],as_index=True).sum()
+december_offers_accepted = december_offers_accepted['Offer_Accepted_Flag']
+december_offers_accepted.to_csv('Hiring_Totals.csv')
+
+############ Second question ############
+# What are the pass through rates?
+
+# calculate sums for each stage
+n_phone = dframe['Phone_Interview_Flag'].sum()
+n_onsite = dframe['Onsite_Interview_Flag'].sum()
+n_offer = dframe['Offer_Extended_Flag'].sum()
+n_accept = dframe['Offer_Accepted_Flag'].sum()
+
+# calculate pass through rates, recalling n = 13131
+ptr_phone = (n_phone/13131)*100
+ptr_onsite = (n_onsite/n_phone)*100
+ptr_offer = (n_offer/n_onsite)*100
+ptr_accept = (n_accept/n_offer)*100
+
+print ("The Application Created > Phone Interview P.T.R. is %.0f percent." %(ptr_phone))
+print ("The Phone Interview > Onsite Interview P.T.R. is %.0f percent." %(ptr_onsite))
+print ("The Onsite Interview > Offer Extend P.T.R. is %.0f percent." %(ptr_offer))
+print ("The Offer Extend > Offer Accept P.T.R. is %.0f percent." %(ptr_accept))
+
+# calculate the ptrs by candidate source
+by_candidate_source = dframe.groupby(['Candidate_Source'],as_index=True).sum()
+by_candidate_source['ptr_phone'] = (by_candidate_source['Phone_Interview_Flag']/by_candidate_source['Application_Created_Flag'])*100
+by_candidate_source['ptr_onsite'] = (by_candidate_source['Onsite_Interview_Flag']/by_candidate_source['Phone_Interview_Flag'])*100
+by_candidate_source['ptr_offer'] = (by_candidate_source['Offer_Extended_Flag']/by_candidate_source['Onsite_Interview_Flag'])*100
+by_candidate_source['ptr_accept'] = (by_candidate_source['Offer_Accepted_Flag']/by_candidate_source['Offer_Extended_Flag'])*100
+
+candidate_source_table = DataFrame(by_candidate_source,columns=['ptr_phone','ptr_onsite','ptr_offer','ptr_accept'])
+candidate_source_table.to_csv('Hiring_PTRs.csv', float_format='$%.2f')
+
+############ Third question ############
+# How can the company meet its goal of 500 hires in Q3 and Q4 of 2015?
+q3q4_2014_hires = 18+30+72+89+67+34
+print ("The number of hires in Q3 & Q4 in 2014 was %s." %(q3q4_2014_hires))
+if q3q4_2014_hires < 500:
+    shortfall = 500 - q3q4_2014_hires
+    print ("There is a projected shortfall of %s hires based on last year's data." %(shortfall))
+
+# first, examine recruiter workload:
+# calculate number of unique recruiters per month
+by_recruiter = dframe.groupby(['Recruiter_ID'],as_index=False).sum()
+# 
+by_recruiter_month = dframe.groupby(['Recruiter_ID','Month_Created'],as_index=False).sum()
+by_recruiter_month = by_recruiter_month[by_recruiter_month.Month_Created > '2013-12-01']
+#
+by_recruiter_month['n_recruiters'] = 1
+recruiter_totals = by_recruiter_month.groupby(['Month_Created'],as_index=False).sum()
+recruiter_totals = DataFrame(recruiter_totals,columns=['Month_Created','n_recruiters'])
+
+# plot number of recruiters deployed to SWE hiring
+recruiters = recruiter_totals.plot(x='Month_Created',y=['n_recruiters'],xlim=('2014-01-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Recruiters Deployed, Per Month')
+plt.xlabel('Month')
+plt.title('Recruiters Assigned to Bay Area SWE Hiring in 2014')
+recruiters.savefig('Hiring_Recruiters1.pdf')
+
+# plot average productivity of recruiters, i.e., n applications, phone interviews, etc.
+recruiter_avg = by_recruiter_month.groupby(['Month_Created'],as_index=False).mean()
+recruiter_avgs = recruiter_avg.plot(x='Month_Created',y=['Application_Created_Flag', 'Phone_Interview_Flag','Onsite_Interview_Flag','Offer_Extended_Flag','Offer_Accepted_Flag'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Candidates Per Month')
+plt.xlabel('Month')
+plt.title('Recruiter Workload in Q3 & Q4 of 2014')
+recruiter_avgs.savefig('Hiring_Recruiters2.pdf')
+
+# plot monthly trends for applications, interviews, and offers
+monthly_trends = dframe.groupby(['Month_Created'],as_index=False).sum()
+del monthly_trends['Application_ID']
+del monthly_trends['Candidate_ID']
+del monthly_trends['Average_Onsite_Interview_Score']
+monthly_avgs = monthly_trends.plot(x='Month_Created',y=['Application_Created_Flag', 'Phone_Interview_Flag','Onsite_Interview_Flag','Offer_Extended_Flag','Offer_Accepted_Flag'],xlim=('2014-01-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Candidates')
+plt.xlabel('Month')
+plt.title('Hiring Trends in 2014')
+monthly_avgs.savefig('Hiring_Averages1.pdf')
+
+# now look at just Q3 and Q4 of 2014, and don't plot number of applications created.
+since_july14 = monthly_trends.plot(x='Month_Created',y=['Phone_Interview_Flag','Onsite_Interview_Flag','Offer_Extended_Flag','Offer_Accepted_Flag'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Candidates')
+plt.xlabel('Month')
+plt.title('Hiring Trends in Q3 and Q4 of 2014')
+since_july14.savefig('Hiring_Averages2.pdf')
+
+# lastly, plot trend for onsite interview scores
+onsite_scores = dframe[dframe.Average_Onsite_Interview_Score > 0]
+interview_quality = onsite_scores.groupby(['Month_Created'],as_index=False).mean()
+
+quality = interview_quality.plot(x='Month_Created',y=['Average_Onsite_Interview_Score'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Average Score')
+plt.xlabel('Month')
+plt.title('Interview Quality in Q3 and Q4 of 2014')
+quality.savefig('Hiring_Interview_Quality.pdf')
+
+# After calculating and plotting recruiter workload, project KPIs so that goal is met:
+
+# First approach: "straight-line" calculation
+goal = 500
+months = 6
+recruiters_needed = (goal/months)
+print ("We would need %.0f recruiters, each working for six months." %(recruiters_needed))
+# calculate targets for each recruiter
+accept = 1
+extended = accept/(ptr_accept/100)
+onsite = extended/(ptr_offer/100)
+phone = onsite/(ptr_onsite/100)
+created = phone/(ptr_phone/100)
+print ("For each recruiter, we'd need %.2f applications, %.2f phone interviews, %.2f onsites, and %.2f offers per month." %(created, phone, onsite, extended))
+# calculate targets for team
+planning_accept = accept*83
+planning_extended = extended*83
+planning_onsite = onsite*83
+planning_phone = phone*83
+planning_created = created*83
+print ("For the entire team, we'd need %.2f applications, %.2f phone interviews, %.2f onsites, and %.2f offers per month." %(planning_created, planning_phone, planning_onsite, planning_extended))
+
+# add planning numbers to monthly_trends data, and plot
+monthly_plan = monthly_trends[monthly_trends.Month_Created > '2014-06-01']
+# convert planning numbers to lists with length six
+list_created = np.repeat(planning_created,6)
+list_phone = np.repeat(planning_phone,6)
+list_onsite = np.repeat(planning_onsite,6)
+list_extended = np.repeat(planning_extended,6)
+list_accept = np.repeat(planning_accept,6)
+
+monthly_plan['planning_created'] = list_created
+monthly_plan['planning_phone'] = list_phone
+monthly_plan['planning_onsite'] = list_onsite
+monthly_plan['planning_extended'] = list_extended
+monthly_plan['planning_accept'] = list_accept
+
+flat_projection = monthly_plan.plot(x='Month_Created',linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Candidates')
+plt.xlabel('Month')
+plt.title('Straight Line Projection for Q3 and Q4 of 2015')
+flat_projection.savefig('Hiring_Projection1.pdf')
+
+# Second approach: scale up 2014 numbers.
+# know that the 2014 total is roughly 60% of the 2015 goal. Divide by .60.
+
+monthly_plan['scaled_created'] = monthly_plan['Application_Created_Flag'] / 0.6
+monthly_plan['scaled_phone'] = monthly_plan['Phone_Interview_Flag'] / 0.6
+monthly_plan['scaled_onsite'] = monthly_plan['Onsite_Interview_Flag'] / 0.6
+monthly_plan['scaled_extended'] = monthly_plan['Offer_Extended_Flag'] / 0.6
+monthly_plan['scaled_accept'] = monthly_plan['Offer_Accepted_Flag'] / 0.6
+
+scaled_projection1 = monthly_plan.plot(x='Month_Created',y=['Application_Created_Flag','scaled_created'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Candidates')
+plt.xlabel('Month')
+plt.title('Scaled Projection for Q3 and Q4 of 2015')
+scaled_projection1.savefig('Hiring_Projection2.pdf')
+
+scaled_projection2 = monthly_plan.plot(x='Month_Created',y=['Phone_Interview_Flag', 'scaled_phone', 'Onsite_Interview_Flag', 'scaled_onsite', 'Offer_Extended_Flag', 'scaled_extended', 'Offer_Accepted_Flag', 'scaled_accept'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
+plt.ylabel('Number of Candidates')
+plt.xlabel('Month')
+plt.title('Scaled Projection for Q3 and Q4 of 2015')
+scaled_projection2.savefig('Hiring_Projection3.pdf')
+
+############ Fourth question ############
+
+# How can recruiters be more productive?
+# Answer: be strategic about targeting applications by candidate source; review candidate_source_table.csv.
+
+# Answer: change shape of recruiter workload
+del recruiter_avg['Application_ID']
+del recruiter_avg['Candidate_ID']
+del recruiter_avg['Average_Onsite_Interview_Score']
+del recruiter_avg['n_recruiters']
+recruiter_avg.to_csv("Hiring_Recruiters.csv", float_format='$%.2f')
+
+# Answer: dig into qualitative data to seek ways to increase productivity.
