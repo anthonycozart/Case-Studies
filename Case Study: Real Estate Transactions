@@ -1,0 +1,160 @@
+# Examining Real Estate Transactions Data, February 2016
+
+# Standard imports for numpy, pandas, plotting
+import numpy as np
+from pandas import Series,DataFrame,to_datetime
+import pandas as pd
+
+%matplotlib inline
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style('whitegrid')
+
+# import geocoder for converting Lat/Lons to Postal Codes
+import geocoder
+
+############ Read in, clean, and format data ############
+
+transactions = pd.read_csv('housing_data.csv')
+# format dates
+transactions['ListDate'] = to_datetime(transactions['ListDate'])
+transactions['CloseDate'] = to_datetime(transactions['CloseDate'])
+# create month variables
+transactions['ListMonth'] = transactions['ListDate'].values.astype('datetime64[M]')
+transactions['CloseMonth'] = transactions['CloseDate'].values.astype('datetime64[M]')
+
+# calculate days on market, and convert to integer
+transactions['DaysOnMarket'] = transactions['CloseDate'] - transactions['ListDate']
+transactions.DaysOnMarket = transactions.DaysOnMarket.astype('timedelta64[D]')
+
+# calculate list price per square foot. Use list price, as opposed to close price, as many close prices are missing.
+transactions['PricePerSqFt'] = transactions['ListPrice']/transactions['LivingArea']
+
+# calculate discount to list price
+transactions['ClosingDiscount'] = (transactions['ListPrice']-transactions['ClosePrice'])/transactions['ListPrice']
+
+# xxx calculate inventory
+
+#### Review data for keystroke errors ####
+transactions.describe()
+
+# LivingArea:
+# transactions.sort_values('LivingArea',ascending=False)
+# one observation looks like a keystroke error:
+transactions = transactions[transactions['LivingArea'] != 9999999]
+# instead of dropping, convert to NaN
+# transactions['LivingArea'].replace(9999999, np.nan)
+
+# ExteriorStories (high values, e.g., 23):
+# transactions.sort_values('ExteriorStories',ascending=False)
+# high ExteriorStories values don't appear to be keystrokes. Likely an apartment building.
+
+# NumBaths:
+# transactions.sort_values('NumBaths',ascending=False)
+# assume that listings with 5 times as many baths as bedrooms have keystroke errors
+transactions['BathBedRatio'] = transactions['NumBaths']/transactions['NumBedrooms']
+def bath_keystroke(x):
+    if x > 5:
+        return 1
+    else:
+        return 0
+
+transactions['BathError']=transactions['BathBedRatio'].apply(bath_keystroke)
+transactions = transactions[transactions['BathError'] != 1]
+# instead of dropping, replace keystroke errors to NaN?
+
+#### Create levels and dummies for listing characteristics ####
+
+# categorize by living area
+def living_area_levels(x):
+    if x < 1000.0:
+        return "Less Than 1,000 SqFt"
+    elif x >= 1000 and x < 2000.0:
+        return "1-2,000 SqFt"
+    elif x >= 2000 and x < 3000.0:
+        return "2-3,000 SqFt"
+    elif x >= 3000 and x < 4000.0:
+        return "3-4,000 SqFt"
+    elif x >= 4000 and x < 5000.0:
+        return "4-5,000 SqFt"
+    elif x >= 5000 and x < 10000.0:
+        return "5-10,000 SqFt"
+    else:
+        return "10,000+ SqFt" 
+
+transactions['LivingAreaCat']=transactions['LivingArea'].apply(living_area_levels)
+
+# create dwelling type dummies
+dwelling_dummies = pd.get_dummies(transactions['DwellingType'])
+
+# create listing status dummies
+status_dummies = pd.get_dummies(transactions['ListingStatus'])
+
+# create pool dummies
+pool_dummies = pd.get_dummies(transactions['Pool'])
+
+# merge dummy data frames, and add to transactions, renaming as clean
+dummies = pd.concat([status_dummies,dwelling_dummies],axis=1)
+dummies = pd.concat([dummies,pool_dummies],axis=1)
+clean_transactions = pd.concat([transactions,dummies],axis=1)
+
+############ Geocode ############
+clean_transactions = clean_transactions.sample(frac=0.05)
+
+def reverse_geocode(x,y):
+    try:
+        g = geocoder.google([x, y], method='reverse')
+        return g.postal
+    except ValueError:
+        return 0
+
+clean_transactions['postal'] = clean_transactions.apply(lambda x: reverse_geocode(x['GeoLat'], x['GeoLon']), axis=1)
+
+############ Visualize Trends and Market Indicators ############
+
+# collapse, by month, by zip, and by zip-month
+by_month = clean_transactions.groupby(['ListMonth'],as_index=True).median()
+by_zip = clean_transactions.groupby(['postal'],as_index=True).median()
+by_zipmonth = clean_transactions.groupby(['postal', 'ListMonth'],as_index=True).median()
+
+prices = ['ListPrice','ClosePrice']
+
+#### By month ####
+
+# prices
+prices_by_month = by_month[prices].plot(linestyle='--',figsize=(12,9))
+plt.ylabel('Price (in USD)')
+plt.xlabel('Listing Date')
+plt.title('Median List and Close Price, March-August 2014')
+plt.savefig('prices_by_month1.pdf', bbox_inches='tight')
+
+# price per square foot
+prices_by_month = by_month['PricePerSqFt'].plot(linestyle='--',figsize=(12,9))
+plt.ylabel('Price (in USD)')
+plt.xlabel('Listing Date')
+plt.title('By Month: Price Per Square Foot, March-August 2014')
+plt.savefig('prices_by_month2.pdf', bbox_inches='tight')
+
+# days on market
+days_on_market = by_month['DaysOnMarket'].plot(linestyle='--',figsize=(12,9))
+plt.ylabel('Median Days on Market')
+plt.xlabel('Listing Date')
+plt.title('Median Days on Market, March-August 2014')
+plt.savefig('days_on_market.pdf', bbox_inches='tight')
+
+# listing status frequencies
+status_list = ['Active','Cancelled','Closed','Expired','Pending','Temp Off Market']
+listing_status = by_month[status_list].plot(linestyle='--',figsize=(12,9))
+plt.ylabel('% of Listings')
+plt.xlabel('Listing Month')
+plt.title('Listing Status Frequencies from March to August 2014')
+plt.savefig('listing_status_rates.pdf', bbox_inches='tight')
+
+#### By zip, and zip-month ####
+# xxx check https://github.com/python-visualization/folium#geojsontopojson-overlays
+
+############ Save Key Metrics to Excel ############ 
+
+metrics = ['ListPrice','ClosePrice','PricePerSqFt','DaysOnMarket', 'Cancelled','Closed','Expired','Pending']
+for_excel = by_month[metrics]
+for_excel.to_csv('Home Listing KPIs.csv', float_format='$%.2f' )
