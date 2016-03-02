@@ -81,32 +81,42 @@ if q3q4_2014_hires < 500:
     print ("There is a projected shortfall of %s hires based on last year's data." %(shortfall))
 
 # first, examine recruiter workload:
-# calculate number of unique recruiters per month
+# collapse data by recruiter and by recruiter-month
+# use .sum() as all of the interview outcome variables (e.g., Onsite_Interview_Flag) are indicators
 by_recruiter = dframe.groupby(['Recruiter_ID'],as_index=False).sum()
-# 
 by_recruiter_month = dframe.groupby(['Recruiter_ID','Month_Created'],as_index=False).sum()
 by_recruiter_month = by_recruiter_month[by_recruiter_month.Month_Created > '2013-12-01']
-#
+
+# calculate number of unique recruiters per month, by setting variable = 1 for all rows in uncollapsed dframe, and then collapse to take sum
 by_recruiter_month['n_recruiters'] = 1
 recruiter_totals = by_recruiter_month.groupby(['Month_Created'],as_index=False).sum()
 recruiter_totals = DataFrame(recruiter_totals,columns=['Month_Created','n_recruiters'])
 
-# plot number of recruiters deployed to SWE hiring
-recruiters = recruiter_totals.plot(x='Month_Created',y=['n_recruiters'],xlim=('2014-01-01','2014-12-01'),linestyle='--',figsize=(12,9))
-plt.ylabel('Number of Recruiters Deployed, Per Month')
-plt.xlabel('Month')
-plt.title('Recruiters Assigned to Bay Area SWE Hiring in 2014')
+# collapse recruiter-month level to month level. Taking the mean produces averages across all recruiters each month
+recruiter_avg = by_recruiter_month.groupby(['Month_Created'],as_index=False).mean()
+
+# plot the number of recruiters working on SWE Hiring together with recruiter workload (phone and onsite interviews)
+
+recruiters, ax = plt.subplots(2,1,figsize=(12,12))
+ax[0].plot(recruiter_totals['Month_Created'],recruiter_totals['n_recruiters']) 
+ax[0].set_xlim('2014-07-01','2014-12-01')
+
+recruiter_avgs = ['Phone_Interview_Flag','Onsite_Interview_Flag']
+ax[1].plot(recruiter_avg['Month_Created'],recruiter_avg[recruiter_avgs])
+ax[1].set_xlim('2014-07-01','2014-12-01')
+
+# set labels and titles
+ax[0].set_xlabel('Month')
+ax[0].set_ylabel('Recruiters')
+ax[0].set_title('Recruiters Assigned to Bay Area SWE Hiring in 2014')
+
+ax[1].set_xlabel('Month')
+ax[1].set_ylabel('Workload Per Recruiter')
+ax[1].set_title('Phone (Blue) and Onsite (Green) Interviews Per Recruiter on Bay Area SWE Hiring in 2014')
+# xxx add legend to second plot
 recruiters.savefig('Hiring_Recruiters1.pdf')
 
-# plot average productivity of recruiters, i.e., n applications, phone interviews, etc.
-recruiter_avg = by_recruiter_month.groupby(['Month_Created'],as_index=False).mean()
-recruiter_avgs = recruiter_avg.plot(x='Month_Created',y=['Application_Created_Flag', 'Phone_Interview_Flag','Onsite_Interview_Flag','Offer_Extended_Flag','Offer_Accepted_Flag'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
-plt.ylabel('Number of Candidates Per Month')
-plt.xlabel('Month')
-plt.title('Recruiter Workload in Q3 & Q4 of 2014')
-recruiter_avgs.savefig('Hiring_Recruiters2.pdf')
-
-# plot monthly trends for applications, interviews, and offers
+# plot monthly trends for applications, interviews, and offers, to see the bigger picture
 monthly_trends = dframe.groupby(['Month_Created'],as_index=False).sum()
 del monthly_trends['Application_ID']
 del monthly_trends['Candidate_ID']
@@ -124,15 +134,22 @@ plt.xlabel('Month')
 plt.title('Hiring Trends in Q3 and Q4 of 2014')
 since_july14.savefig('Hiring_Averages2.pdf')
 
-# lastly, plot trend for onsite interview scores
-onsite_scores = dframe[dframe.Average_Onsite_Interview_Score > 0]
-interview_quality = onsite_scores.groupby(['Month_Created'],as_index=False).mean()
+# lastly, plot the trends for onsite interview scores and monthly number of onsites
+interviews, ax = plt.subplots(2,1,figsize=(12,12))
+ax[0].plot(monthly_trends['Month_Created'],monthly_trends['Onsite_Interview_Flag']) 
+ax[0].set_xlim('2014-07-01','2014-12-01')
 
-quality = interview_quality.plot(x='Month_Created',y=['Average_Onsite_Interview_Score'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
-plt.ylabel('Average Score')
-plt.xlabel('Month')
-plt.title('Interview Quality in Q3 and Q4 of 2014')
-quality.savefig('Hiring_Interview_Quality.pdf')
+ax[1].plot(interview_quality['Month_Created'],interview_quality['Average_Onsite_Interview_Score'])
+ax[1].set_xlim('2014-07-01','2014-12-01')
+
+# set labels and titles
+ax[0].set_xlabel('Month')
+ax[0].set_ylabel('Monthly Total')
+ax[1].set_xlabel('Month')
+ax[1].set_ylabel('Interview Score')
+ax[0].set_title('Number of Onsite Interviews for Bay Area SWE Applications')
+ax[1].set_title('Average Interview Score for Bay Area SWE Applications')
+interviews.savefig('Hiring_Quality.pdf')
 
 # After calculating and plotting recruiter workload, project KPIs so that goal is met:
 
