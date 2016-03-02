@@ -1,0 +1,41 @@
+# Exploring Guardian's API
+
+# Standard imports
+import pandas as pd
+import numpy as np
+from datetime import datetime
+
+import requests
+
+# Set parameters
+keys = {'api-key': ,
+        'section':'football',
+        'page-size': '200',
+        'from-date':'2015-06-01'
+        }
+response = requests.get('http://content.guardianapis.com/search?', params=keys)
+json_obj = response.json()
+
+articles = []
+webURL = []
+webPubDate = []
+for story in json_obj['response']['results']:
+    articles.append(story['webTitle'])
+    webURL.append(story['webUrl'])
+    webPubDate.append(story['webPublicationDate'])
+
+# Convert to Series (which have indices, and can be combined more easily)
+articles = pd.Series(articles, name='articles')
+webURL = pd.Series(webURL, name='webURL')
+webPubDate = pd.Series(webPubDate, name='webPubDate')
+
+step1 = pd.concat([articles, webURL], axis=1)
+dframe = pd.concat([step1,webPubDate], axis=1)
+
+# Convert webPubDate to datetime object
+dframe['webPubDate'] = pd.to_datetime(dframe['webPubDate'])
+
+# To do:
+# calculate concentration of coverage to London teams
+# calculate frequency of authors by favorite authors
+# use tags to track slow-drip of FIFA corruption related articles
