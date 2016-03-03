@@ -135,6 +135,10 @@ plt.title('Hiring Trends in Q3 and Q4 of 2014')
 since_july14.savefig('Hiring_Averages2.pdf')
 
 # lastly, plot the trends for onsite interview scores and monthly number of onsites
+
+onsite_scores = dframe[dframe.Average_Onsite_Interview_Score > 0]
+interview_quality = onsite_scores.groupby(['Month_Created'],as_index=False).mean()
+
 interviews, ax = plt.subplots(2,1,figsize=(12,12))
 ax[0].plot(monthly_trends['Month_Created'],monthly_trends['Onsite_Interview_Flag']) 
 ax[0].set_xlim('2014-07-01','2014-12-01')
