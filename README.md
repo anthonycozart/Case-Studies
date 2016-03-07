@@ -1,4 +1,4 @@
-# hello-world
+# Projects
 Ideas &amp; snippets
 
-Including: projects from Wisconsin and Yale, consulting work, and current ideas.
+Including: from Wisconsin and Yale, consulting work, and current ideas.
