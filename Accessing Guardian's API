@@ -3,37 +3,66 @@
 # Standard imports
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import requests
 
-# Set parameters
-keys = {'api-key': ,
-        'section':'football',
-        'page-size': '200',
-        'from-date':'2015-06-01'
+# set URL and define parameters
+URL = 'http://content.guardianapis.com/search'
+keys = {'api-key': '0bfa091f-6700-4368-a257-159e57baac43',
+        'from-date': '2016-01-01',
+        'to-date': '2016-03-08',
+        'order-by': 'newest',
+        'page-size': 200,
+        'page': 1,
+        'section':'football'
         }
-response = requests.get('http://content.guardianapis.com/search?', params=keys)
-json_obj = response.json()
 
-articles = []
+# We don't have to worry about multiple pages in one day; there won't be more than 200 soccer (football) articles in a given day
+# Create place-holder lists
+webTitle = []
 webURL = []
 webPubDate = []
-for story in json_obj['response']['results']:
-    articles.append(story['webTitle'])
-    webURL.append(story['webUrl'])
-    webPubDate.append(story['webPublicationDate'])
+webType = []
+webAuthor = []
 
-# Convert to Series (which have indices, and can be combined more easily)
-articles = pd.Series(articles, name='articles')
-webURL = pd.Series(webURL, name='webURL')
-webPubDate = pd.Series(webPubDate, name='webPubDate')
+# But we do need to make requests for each day, looping through daycount (daycount = 1,....)
+start_date = date(2016,1,1)
+end_date = date(2016,3,8)
+dayrange = range((end_date - start_date).days + 1)
 
-step1 = pd.concat([articles, webURL], axis=1)
-dframe = pd.concat([step1,webPubDate], axis=1)
+# Iteration code for all days comes from here: http://stackoverflow.com/questions/7274267/print-all-day-dates-between-two-dates
+for daycount in dayrange:
+    dt = start_date + timedelta(days=daycount)
+    datestr = dt.strftime('%Y-%m-%d')
+    # edit keys dictionary so that to and from range is just one day
+    keys['from-date'] = datestr
+    keys['to-date'] = datestr
+    # request data
+    response = requests.get(URL, keys)
+    json_obj = response.json()
+    # append data to place-holder lists
+    for story in json_obj['response']['results']:
+                webTitle.append(story['webTitle'])
+                webURL.append(story['webUrl'])
+                webPubDate.append(story['webPublicationDate'])
+                webType.append(story['type'])
+                webAuthor.append(story['byline'])
+                
+# format and concat lists to Pandas dframe       
+Title = pd.Series(webTitle, name='webTitle')
+URL = pd.Series(webURL, name='webURL')
+PubDate = pd.Series(webPubDate, name='webPubDate')
+Type = pd.Series(webType, name='webType')
+Byline = pd.Series(webAuthor, name='webAuthor')
 
-# Convert webPubDate to datetime object
-dframe['webPubDate'] = pd.to_datetime(dframe['webPubDate'])
+step1 = pd.concat([Title,URL], axis=1)
+step2 = pd.concat([PubDate,Type], axis=1)
+step3 = pd.concat([step1,Byline], axis=1)
+dframe = pd.concat([step2,step3], axis=1)
+
+# Convert PubDate to datetime object
+dframe['PubDate'] = pd.to_datetime(dframe['PubDate'])
 
 # To do:
 # calculate concentration of coverage to London teams
