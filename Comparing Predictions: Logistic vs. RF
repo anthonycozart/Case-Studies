@@ -1,0 +1,91 @@
+# Let's compare the prediction accuracy of logistic and Random Forest classifiers, 
+# using very simple data for houses that were listing in 2015. Logistic regressions were for many years the workhorse model
+# for many predictions in behavioral economics. Just how much better is Random Forest in this simple data?
+
+import pandas as pd
+import numpy as np
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cross_validation import KFold
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import train_test_split
+from sklearn.metrics import classification_report, roc_curve, auc
+from sklearn.linear_model import LogisticRegression
+
+import matplotlib.pyplot as plt
+sns.set_style('whitegrid')
+%matplotlib inline
+
+df = pd.read_csv('Python/housing_data_clean.csv')
+
+# drop miscellaneous variables, many of which have missing values
+df.drop(['Unnamed: 0','ListingId','Pool','ListDate','CloseDate','GeoLat','GeoLon','days_on_market',
+         'DwellingType','ListMonth','CloseMonth','ClosingDiscount','BathError','LivingAreaCat',
+         'Active','Cancelled','Expired','Pending','Temp Off Market','ListingStatus', 'ClosePrice',
+         'BathBedRatio','PricePerSqFt'],axis=1,inplace=True)
+
+# grab list of remaining columns
+col_names = df.columns.tolist()
+
+# drop rows with missing values (just a few, primarily due to no LivingArea value)
+df.dropna(axis=0,inplace=True)
+
+# save remarks column for later, and create dependent variable object
+Remarks = df['PublicRemarks']
+y = df['Closed']
+df.drop(['PublicRemarks','Closed'],axis=1,inplace=True)
+
+# calculate additional variables of interest
+df['LivingAreaSq'] = df['LivingArea']**2
+df['ExteriorStoriesXApartment'] = df['LivingArea']*df['Apartment Style/Flat']
+
+#### Random Forest ####
+# prepare covariates for RF
+covariates = df.as_matrix().astype(np.float)
+scaler = StandardScaler()
+covariates = scaler.fit_transform(covariates)
+
+# split data
+cov_train,cov_test,y_train,y_test = train_test_split(covariates,y,test_size=0.2)
+
+# define RF and make predictions
+forest = RandomForestClassifier(n_estimators=10)
+forest = forest.fit(cov_train,y_train)
+predictions = forest.predict(cov_test)
+print (classification_report(predictions,y_test))
+
+# plot ROC
+false_positive_rate, true_positive_rate, thresholds = roc_curve(y_test, predictions)
+roc_auc = auc(false_positive_rate, true_positive_rate)
+plt.title('R.O.C.')
+plt.plot(false_positive_rate, true_positive_rate, 'b', label='AUC = %0.2f'% roc_auc)
+plt.legend(loc='lower right')
+plt.plot([0,1],[0,1],'r--')
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+
+#### Logistic Regression ####
+
+# drop 'Single Family - Detached' to avoid collinearity
+df.drop('Single Family - Detached',axis=1,inplace=True)
+# flatten array for dependent variable
+y = np.ravel(y)
+
+# split data again
+cov_train,cov_test,y_train,y_test = train_test_split(df,y,test_size=0.2)
+
+# define logistic regression and make predictions
+logistic = LogisticRegression()
+logistic.fit(cov_train, y_train)
+predictions = logistic.predict(cov_test)
+print (classification_report(predictions,y_test))
+
+# plot ROC
+false_positive_rate, true_positive_rate, thresholds = roc_curve(y_test, predictions)
+roc_auc = auc(false_positive_rate, true_positive_rate)
+plt.title('Receiver Operating Characteristic')
+plt.plot(false_positive_rate, true_positive_rate, 'b', label='AUC = %0.2f'% roc_auc)
+plt.legend(loc='lower right')
+plt.plot([0,1],[0,1],'r--')
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
