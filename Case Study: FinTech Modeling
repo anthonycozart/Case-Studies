@@ -1,0 +1,122 @@
+import numpy as np
+import pandas as pd
+from pandas import Series,DataFrame
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style('whitegrid')
+%matplotlib inline
+
+dframe = pd.read_csv('Data.csv')
+
+# Historical Average = salary for Week 0, then convert to float, and fill down within User ID
+dframe['Historical Average'] = np.where(dframe['Week'] == 0, dframe['Salary'], 0)
+dframe['Historical Average'] = dframe['Historical Average'].astype(float)
+dframe['Historical Average'].replace(to_replace=0, method='ffill',inplace=True)
+# Then drop week = 0
+dframe = dframe[dframe['Week'] != 0]
+
+# Now, let's take into account the fee of $3, and decrease the average by this amount as well
+fee = 3
+dframe['Salary After Fee'] = dframe['Salary'] - fee
+dframe['Historical Average'] = dframe['Historical Average'] - fee
+
+#### Set up lending model ####
+# Key features: 
+# When a user earns more than average, he/she saves $. When a user earns less than average, he/she is lent $.
+# There's a stop loss for the amount lent, at the historical average.
+# We need to know the amount paid and running balance for each user, each week
+
+# Delta = Salary - Average
+dframe['Delta'] = dframe['Salary After Fee'] - dframe['Historical Average']
+
+# Calculate Balance, using Deltas, with stop_loss as floor
+stop_loss = -dframe['Historical Average']
+dframe['Balance'] = dframe.groupby('User ID')['Delta'].transform(pd.Series.cumsum).clip_lower(stop_loss)
+
+# Flag instances where users are at limit of borrowing
+dframe['Flag'] = np.where((-dframe['Balance']==dframe['Historical Average']),1,0)
+
+# Calculate difference in balance, from week to week. This allows us to update delta so that users can withdraw up to the limit (for the first instance where flag = 1)
+dframe['Diff'] = dframe.groupby('User ID')['Balance'].diff()
+
+# Define function that calculates deltas correctly, taking into account borrowing limit
+def correct_delta(flag,diff,delta):
+    if flag == 1:
+        # cannot borrow more than limit; diff gets up to limit in first instance of flag = 1, then diff = 0 for remaining consecutive instances of flag = 1.
+        return diff
+    else:
+    	# delta correct for all other instances where balance not at limit
+        return delta
+    
+dframe['Corrected Delta'] = dframe.apply(lambda x: correct_delta(x['Flag'], x['Diff'], x['Delta']), axis=1)
+
+# Recalculate Balance, using Corrected Delta
+dframe['Balance in App'] = dframe.groupby('User ID')['Corrected Delta'].transform(pd.Series.cumsum)
+
+# Calculate Pay, using Corrected Delta (really don't need to use a function, but this makes it clear and allows us to use the function later, if needed)
+def app_pay(salary,cdelta):
+    pay = salary - cdelta
+    return pay
+
+dframe['Pay'] = dframe.apply(lambda x: app_pay(x['Salary After Fee'], x['Corrected Delta']), axis=1)
+
+#### Build metrics for all users ####
+
+# Indicators for borrowing/saving
+dframe['Boost'] = np.where(dframe['Corrected Delta']<0,1,0)
+dframe['Cushion'] = np.where(dframe['Corrected Delta']>0,1,0)
+
+# Saving rate (Balance in App/Salary for Period)
+dframe['Cumulative Salary Earned'] = dframe.groupby('User ID')['Salary'].transform(pd.Series.cumsum)
+dframe['Savings Pct of Salary'] = dframe['Balance in App']/dframe['Cumulative Salary Earned']
+# Adjusted average salary (historical average is four weeks of data)
+dframe['Adjusted Average Salary'] = (dframe['Historical Average']*4 + dframe['Cumulative Salary Earned'])/(dframe['Week']+4)
+
+# Application-wide (i.e., for all users) summary statistics
+dframe['App Balance'] = dframe.groupby('Week')['Balance in App'].transform(pd.Series.sum)
+dframe['App Salary After Fee'] = dframe.groupby('Week')['Salary After Fee'].transform(pd.Series.sum)
+# 828/4942
+
+# Save data to csv
+dframe.to_csv("Cleaned Data.csv")
+
+#### Data Visualization ####
+# Goal: to show range of cases: when it helps users save, when it doesn't help save but still smooths income, and highlight how lending model might be adjusted.
+
+# Case where we under-estimate average, or user has bump up in income
+dframe101 = dframe[dframe['User ID'] == 101]
+dframe101.plot(x='Week',y=['Salary','Pay'],linestyle='--',figsize=(12,9))
+plt.title("Pay vs. Salary for User ID: 101")
+plt.ylabel("USD ($)")
+plt.xlabel("Number of Weeks Using App")
+plt.savefig('Plot1.pdf',bbox_inches='tight')
+
+# Case where borrowing limit is reached
+dframe104 = dframe[dframe['User ID'] == 104]
+dframe104.plot(x='Week',y=['Salary','Pay','Balance in App'],linestyle='--',figsize=(12,9))
+plt.title("Pay vs. Salary for User ID: 104")
+plt.ylabel("USD ($)")
+plt.xlabel("Number of Weeks Using App")
+# shade where user has reached borrowing limit
+plt.axvspan(7,10, color='#808080', alpha=0.5, lw=0)
+plt.savefig('Plot2.pdf',bbox_inches='tight')
+
+# Second case where borrowing limit is reached
+# Plot 110
+dframe110 = dframe[dframe['User ID'] == 110]
+dframe110.plot(x='Week',y=['Salary','Pay'],linestyle='--',figsize=(12,9))
+plt.title("Pay vs. Salary for User ID: 110")
+plt.ylabel("USD ($)")
+plt.xlabel("Number of Weeks Using App")
+# shade where user has reached borrowing limit
+plt.axvspan(5,7, color='#808080', alpha=0.5, lw=0)
+plt.savefig('Plot3.pdf',bbox_inches='tight')
+
+# Case where user unable to save
+dframe103 = dframe[dframe['User ID'] == 103]
+dframe103.plot(x='Week',y=['Salary','Pay','Balance in App'],linestyle='--',figsize=(12,9))
+plt.title("Pay vs. Salary for User ID: 103")
+plt.ylabel("USD ($)")
+plt.xlabel("Number of Weeks Using App")
+plt.savefig('Plot4.pdf',bbox_inches='tight')
