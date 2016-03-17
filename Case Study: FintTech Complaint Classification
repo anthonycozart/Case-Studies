@@ -1,0 +1,75 @@
+import pandas as pd
+import numpy as np
+
+import string
+import re
+import nltk
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.cross_validation import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+from sklearn.linear_model import SGDClassifier
+from sklearn.svm import SVC
+
+nltk.download('stopwords')
+
+train_url = ''
+train_df = pd.read_csv(train_url)
+
+# Define text processing function
+def text_cleaning(message):
+    # Removing non-letters improves accuracy (marginally)        
+    letters_only = re.sub("[^a-zA-Z]", " ", message)
+    # Remove X: letters_no_x = letters_only.replace("X", "")
+    nopunc = [char for char in letters_only if char not in string.punctuation]
+    nopunc = ''.join(nopunc)
+    return [word for word in nopunc.split() if word.lower() not in stopwords.words('english')]
+
+# Split data, using unprocessed complaint text, into training and test datasets
+complaint_train, complaint_test, issue_train, issue_test = \
+train_test_split(train_df['complaint'], train_df['issue'], test_size=0.2, random_state=42)
+
+# Use pipeline to run model and predict off the test dataset
+pipeline = Pipeline([
+    ('bow', CountVectorizer(analyzer=text_cleaning)),  # complaint strings to tokens & counts
+    ('tfidf', TfidfTransformer()),  # counts to weighted TF-IDF scores
+    ('classifier', MultinomialNB()),  # train on TF-IDF vectors w/ Naive Bayes classifier
+])
+
+# Variations:
+# add n_gram=(1,2) inside CountVectorizer (similar accuracy)
+# add n_gram=(1,2,3) inside CountVectorizer (similar accuracy)
+# SVC()
+# SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42)
+# RandomForestClassifier
+
+pipeline.fit(complaint_train,issue_train)
+predictions = pipeline.predict(complaint_test)
+# Evaluate accuracy
+print (classification_report(predictions,issue_test))
+
+# Now, use test data to make predictions, and save submissions file in requested format
+test_url = ''
+test_df = pd.read_csv(test_url)
+
+predictions = pipeline.predict(test_df['complaint'])
+test_df['id'] = predictions
+
+# format, using submission file as template. (the GroupBy results in only non-zero issues)
+length = len(test_df)
+submission = test_df.groupby(['id'],as_index=True).count()
+submission['complaint'] = submission['complaint']/length
+
+format_url = ''
+submission_format = pd.read_csv(format_url)
+submission_format = submission_format.transpose()
+submission_format.columns = ['id']
+
+submission = pd.merge(submission, submission_format, right_index=True, left_index=True,how='outer')
+submission.drop(['date','state','zip_code','id'], axis=1,inplace=True)
+submission = submission.fillna(0)
+submission = submission.transpose()
+submission.to_csv('Predicted Complaints.csv',float_format='%.4f')
