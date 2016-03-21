@@ -70,7 +70,7 @@ by_candidate_source['ptr_offer'] = (by_candidate_source['Offer_Extended_Flag']/b
 by_candidate_source['ptr_accept'] = (by_candidate_source['Offer_Accepted_Flag']/by_candidate_source['Offer_Extended_Flag'])*100
 
 candidate_source_table = DataFrame(by_candidate_source,columns=['ptr_phone','ptr_onsite','ptr_offer','ptr_accept'])
-candidate_source_table.to_csv('Hiring_PTRs.csv', float_format='$%.2f')
+candidate_source_table.to_csv('Hiring_PTRs.csv', float_format='%.2f')
 
 ############ Third question ############
 # How can the company meet its goal of 500 hires in Q3 and Q4 of 2015?
@@ -114,7 +114,7 @@ ax[1].set_xlabel('Month')
 ax[1].set_ylabel('Workload Per Recruiter')
 ax[1].set_title('Phone (Blue) and Onsite (Green) Interviews Per Recruiter on Bay Area SWE Hiring in 2014')
 # xxx add legend to second plot
-recruiters.savefig('Hiring_Recruiters1.pdf')
+plt.savefig('Hiring_Recruiters1.pdf')
 
 # plot monthly trends for applications, interviews, and offers, to see the bigger picture
 monthly_trends = dframe.groupby(['Month_Created'],as_index=False).sum()
@@ -125,14 +125,14 @@ monthly_avgs = monthly_trends.plot(x='Month_Created',y=['Application_Created_Fla
 plt.ylabel('Number of Candidates')
 plt.xlabel('Month')
 plt.title('Hiring Trends in 2014')
-monthly_avgs.savefig('Hiring_Averages1.pdf')
+plt.savefig('Hiring_Averages1.pdf')
 
 # now look at just Q3 and Q4 of 2014, and don't plot number of applications created.
 since_july14 = monthly_trends.plot(x='Month_Created',y=['Phone_Interview_Flag','Onsite_Interview_Flag','Offer_Extended_Flag','Offer_Accepted_Flag'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
 plt.ylabel('Number of Candidates')
 plt.xlabel('Month')
 plt.title('Hiring Trends in Q3 and Q4 of 2014')
-since_july14.savefig('Hiring_Averages2.pdf')
+plt.savefig('Hiring_Averages2.pdf')
 
 # lastly, plot the trends for onsite interview scores and monthly number of onsites
 
@@ -153,7 +153,7 @@ ax[1].set_xlabel('Month')
 ax[1].set_ylabel('Interview Score')
 ax[0].set_title('Number of Onsite Interviews for Bay Area SWE Applications')
 ax[1].set_title('Average Interview Score for Bay Area SWE Applications')
-interviews.savefig('Hiring_Quality.pdf')
+plt.savefig('Hiring_Quality.pdf')
 
 # After calculating and plotting recruiter workload, project KPIs so that goal is met:
 
@@ -196,7 +196,7 @@ flat_projection = monthly_plan.plot(x='Month_Created',linestyle='--',figsize=(12
 plt.ylabel('Number of Candidates')
 plt.xlabel('Month')
 plt.title('Straight Line Projection for Q3 and Q4 of 2015')
-flat_projection.savefig('Hiring_Projection1.pdf')
+plt.savefig('Hiring_Projection1.pdf')
 
 # Second approach: scale up 2014 numbers.
 # know that the 2014 total is roughly 60% of the 2015 goal. Divide by .60.
@@ -211,13 +211,13 @@ scaled_projection1 = monthly_plan.plot(x='Month_Created',y=['Application_Created
 plt.ylabel('Number of Candidates')
 plt.xlabel('Month')
 plt.title('Scaled Projection for Q3 and Q4 of 2015')
-scaled_projection1.savefig('Hiring_Projection2.pdf')
+plt.savefig('Hiring_Projection2.pdf')
 
 scaled_projection2 = monthly_plan.plot(x='Month_Created',y=['Phone_Interview_Flag', 'scaled_phone', 'Onsite_Interview_Flag', 'scaled_onsite', 'Offer_Extended_Flag', 'scaled_extended', 'Offer_Accepted_Flag', 'scaled_accept'],xlim=('2014-07-01','2014-12-01'),linestyle='--',figsize=(12,9))
 plt.ylabel('Number of Candidates')
 plt.xlabel('Month')
 plt.title('Scaled Projection for Q3 and Q4 of 2015')
-scaled_projection2.savefig('Hiring_Projection3.pdf')
+plt.savefig('Hiring_Projection3.pdf')
 
 ############ Fourth question ############
 
@@ -229,6 +229,6 @@ del recruiter_avg['Application_ID']
 del recruiter_avg['Candidate_ID']
 del recruiter_avg['Average_Onsite_Interview_Score']
 del recruiter_avg['n_recruiters']
-recruiter_avg.to_csv("Hiring_Recruiters.csv", float_format='$%.2f')
+plt.to_csv("Hiring_Recruiters.csv", float_format='%.2f')
 
 # Answer: dig into qualitative data to seek ways to increase productivity.
