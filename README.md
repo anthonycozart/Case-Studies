@@ -1,3 +1,3 @@
-# Case Studies
+# Ideas, code, & case studies
 
-Academic and professional case studies, in python and stata.
+Including from Wisconsin, Yale, consulting work, and personal interests
