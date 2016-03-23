@@ -1,0 +1,168 @@
+// Stata code analyzing educational outcomes data
+
+// PART 1, A: join raw school and treatment data
+
+import delimited "treatment_corr.csv", clear
+gen school_id = 1 /* this is Camacho */
+replace school_id = 2 if school=="Dale"       
+replace school_id = 3 if school=="Lindberg"
+replace school_id = 4 if school=="Marshall"
+replace school_id = 5 if school=="Meyer"
+replace school_id = 6 if school=="Roslin"
+replace school_id = 7 if school=="Simon"
+replace school_id = 8 if school=="Underwood"
+replace school_id = 9 if school=="Whitmore"
+sum teacher
+gen teacher_id = (school_id*10)+teacher
+save "treatment", replace
+
+foreach s in Camacho Dale Lindberg Marshall Meyer Roslin Simon Underwood Whitmore{
+	import delimited "`s'.csv", clear
+	gen school = "`s'"
+	save "`s'", replace
+}
+foreach s in Camacho Dale Lindberg Marshall Meyer Roslin Simon Underwood{
+	append using "`s'"
+}
+
+gen school_id = 1 /* this is Camacho */
+replace school_id = 2 if school=="Dale"       
+replace school_id = 3 if school=="Lindberg"
+replace school_id = 4 if school=="Marshall"
+replace school_id = 5 if school=="Meyer"
+replace school_id = 6 if school=="Roslin"
+replace school_id = 7 if school=="Simon"
+replace school_id = 8 if school=="Underwood"
+replace school_id = 9 if school=="Whitmore"
+gen teacher_id = (school_id*10)+teacher
+gen new_id = _n
+
+merge m:1 teacher_id using "treatment"
+assert _merge == 3
+drop _merge
+
+// PART 1, B: clean data, creating factor variables to replace string variables; deal with missing baseline scores.
+
+tab treatment
+gen new_treatment = 0 /* control */
+replace new_treatment = 1 if treatment=="delayed incentive"
+replace new_treatment = 2 if treatment=="incentive"
+replace new_treatment = 3 if treatment=="loss aversion"
+replace new_treatment = 4 if treatment=="norms"
+
+tab race /* some entries use upper and lowercase letters, others just lowercase. Convert to lowers only */
+replace race = strlower(race)
+gen new_race = 0 
+replace new_race = 1 if race=="african american" | race=="black"
+replace new_race = 2 if race=="hispanic" /* this distinction from white/Caucasian may not be appropriate as many hispanics identify as white */
+
+tab lunch_status
+gen free_lunch = 0
+replace free_lunch = 1 if lunch_status=="free" | lunch_status=="free lunch"
+
+tab gender
+gen female = 0
+replace female = 1 if gender=="female" | gender=="f"
+
+drop race lunch_status gender id teacher
+rename treatment treatment_string
+rename new_treatment treatment
+rename new_race race
+order new_id school_id teacher_id treatment race female free_lunch baseline_score final_score
+
+misstable summarize /* 35 students do not have scores recorded for baseline test */
+gen missing = 0
+replace missing = 1 if baseline_score==.
+logit missing i.female i.free_lunch i.race 
+logit missing i.female i.free_lunch i.race i.treatment i.school_id  
+
+gen temp = 1
+egen teacher_load = sum(temp), by(teacher_id)
+egen school_size = sum(temp), by(school_id)
+drop temp
+
+drop if missing == 1
+
+gen value_added = final_score - baseline_score
+
+// PART 1, C: Check for balance
+
+// T-tests for difference in means
+gen black = 0
+replace black = 1 if race == 1
+gen hispanic = 0
+replace hispanic = 1 if race == 2
+
+sum baseline_score, detail
+gen baseline_p25 = 0
+replace baseline_p25 = 1 if baseline_score <= r(p25)
+gen baseline_p50 = 0
+replace baseline_p50 = 1 if baseline_score > r(p25) & baseline_score <= r(p50)
+gen baseline_p75 = 0
+replace baseline_p75 = 1 if baseline_score > r(p50) & baseline_score <= r(p75)
+gen baseline_p99 = 0
+replace baseline_p99 = 1 if baseline_score > r(p75)
+
+gen treated = 0
+replace treated = 1 if treatment>0
+
+foreach covariate in black hispanic female free_lunch baseline_p25 baseline_p50 baseline_p75 baseline_p99{
+	ttest `covariate', by(treated)
+}
+
+// Regress treatments on observables
+gen treatment_di = 0
+replace treatment_di = 1 if treatment==1
+gen treatment_i = 0
+replace treatment_i = 1 if treatment==2
+gen treatment_la = 0
+replace treatment_la = 1 if treatment==3
+gen treatment_n = 0
+replace treatment_n = 1 if treatment==4
+
+gen di = 0
+replace di = 1 if treatment<2
+gen i = 0
+replace i = 1 if treatment==0 | treatment==2
+gen la = 0
+replace la = 1 if treatment==0 | treatment==3
+gen n = 0
+replace n = 1 if treatment==0 | treatment==4
+
+foreach x in di i la n{
+	reg treatment_`x' i.race i.female i.free_lunch baseline_score if `x'==1, r
+	outreg2 using reg_treatment_`x', replace
+}
+drop di i la n
+
+// PART 1, D
+
+// A: Summary Statistics
+
+tabulate treatment
+tabulate race
+tabulate female
+tabulate free_lunch
+
+egen s_avg_baseline = mean(baseline_score), by(school_id)
+egen s_avg_final = mean(final_score), by(school_id)
+egen s_avg_value_added = mean(value_added), by(school_id)
+egen t_avg_value_added = mean(value_added), by(teacher_id)
+
+sum baseline_score final_score school_size teacher_load s_avg_baseline s_avg_final s_avg_value_added t_avg_value_added
+
+// C:
+
+reg value_added i.treatment i.race i.female i.free_lunch, vce(cluster teacher_id)
+outreg2 using reg_noFE, replace
+reg value_added i.treatment i.race i.female i.free_lunch i.school_id, vce(cluster teacher_id)
+outreg2 using reg_sFE, replace
+reg value_added i.treatment i.race i.female i.free_lunch i.teacher_id, r
+outreg2 using reg_tFE, replace
+
+reg value_added i.treatment##i.race i.free_lunch i.female i.teacher_id, r
+reg value_added i.treatment##i.female i.free_lunch i.race i.teacher_id, r
+reg value_added i.treatment##i.free_lunch i.female i.race i.teacher_id, r
+
+
+twoway (scatter baseline_score value_added), by(treatment_string)
