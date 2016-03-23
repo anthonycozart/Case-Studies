@@ -1,4 +1,3 @@
-# Projects
-Ideas &amp; snippets
+# Case Studies
 
-Including: from Wisconsin and Yale, consulting work, and current ideas.
+Academic and professional case studies, in python and stata.
