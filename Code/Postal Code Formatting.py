@@ -25,7 +25,7 @@ type(zips_long.value)
 
 # split value variable, into separate columns for lat and for lon
 latlon = zips_long['value'].apply(lambda x: pd.Series(x.split(',')))
-latlon.columns = ['Lat','Lon']
+latlon.columns = ['Lon','Lat']
 
 zips_long['Lat'] = latlon['Lat']
 zips_long['Lon'] = latlon['Lon']
