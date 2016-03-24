@@ -1,0 +1,107 @@
+import pandas as pd
+from pandas import Series,DataFrame
+import numpy as np
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+
+url = 'https://collegescorecard.ed.gov/downloads/Most-Recent-Cohorts-All-Data-Elements.csv'
+dframe = pd.read_csv(url)
+
+# data exploration
+dframe.shape
+dframe.info()
+
+# grab data for SF Bay Area, first finding school names
+subset = dframe[dframe['STABBR'].isin(['CA'])]
+bay_area = ['San Francisco','Berkeley','Palo Alto','Santa Clara','Moraga']
+subset = dframe[dframe['STABBR'].isin(bay_area)]
+subset.head()
+
+schools = ['University of California-Berkeley','University of California-San Francisco','University of San Francisco','San Francisco State University','Santa Clara University',"Saint Mary's College of California",'Stanford University']
+subset = dframe[dframe['INSTNM'].isin(schools)]
+
+# identify variables of interest
+url = 'https://collegescorecard.ed.gov/assets/CollegeScorecardDataDictionary-09-08-2015.csv'
+dictionary = pd.read_csv(url)
+student_vars = dictionary[dictionary['dev-category'].isin(['student'])]
+earnings_vars = dictionary[dictionary['dev-category'].isin(['earnings'])]
+admissions_vars = dictionary[dictionary['dev-category'].isin(['admissions'])]
+academic_vars = dictionary[dictionary['dev-category'].isin(['academics'])]
+
+# keep subset
+to_keep = ['INSTNM','CITY','STABBR','UGDS','ADM_RATE','SATVRMID','SATMTMID','SATWRMID','SAT_AVG','PCIP16','PCIP24','PCIP27','PCIP42','PCIP45','pct10_earn_wne_p10','pct25_earn_wne_p10','pct75_earn_wne_p10','pct90_earn_wne_p10']
+subset_clean = subset[to_keep]
+
+# reindex and sort
+indexed = subset_clean.set_index('INSTNM')
+indexed = indexed.sort_values(by='ADM_RATE')
+# UCSF didn't report data; drop
+indexed.drop('University of California-San Francisco',inplace=True)
+
+# USE: https://datasciencelab.wordpress.com/2013/12/21/beautiful-plots-with-pandas-and-matplotlib/
+
+# sort by admissions rate
+# plot SAT score as horizontal bar
+
+# Create a figure of given size
+fig = plt.figure(figsize=(16,12))
+# Add a subplot
+ax = fig.add_subplot(111)
+# Set title
+ttl = 'Composite SAT Scores and Admittance Rates for SF Bay Area Colleges'
+# Set color transparency (0: transparent; 1: solid)
+a = 0.7
+# Create a colormap
+customcmap = [(x/5.0,  x/10.0, 0.01) for x in range(len(indexed))]
+# Plot the 'population' column as horizontal bar plot
+indexed['SAT_AVG'].plot(kind='barh', ax=ax, alpha=a, legend=False, color=customcmap,
+                        edgecolor='w', xlim=(0,1600), title=ttl)
+# Remove grid lines (dotted lines inside plot)
+ax.grid(False)
+# Remove plot frame
+ax.set_frame_on(False)
+# Pandas trick: remove weird dotted line on axis
+# ax.lines[0].set_visible(False)
+ 
+# Customize title, set position, allow space on top of plot for title
+ax.set_title(ax.get_title(), fontsize=26, alpha=a, ha='left')
+plt.subplots_adjust(top=0.9)
+ax.title.set_position((0,1.08))
+ 
+# Set x axis label on top of plot, set label text
+ax.xaxis.set_label_position('top')
+xlab = 'Average Composite SAT Score'
+ax.set_xlabel(xlab, fontsize=20, alpha=a, ha='left')
+ax.xaxis.set_label_coords(0, 1.04)
+
+# Create a fake colorbar
+ctb = LinearSegmentedColormap.from_list('custombar', customcmap, N=2048)
+# Trick from http://stackoverflow.com/questions/8342549/
+# matplotlib-add-colorbar-to-a-sequence-of-line-plots
+sm = mpl.cm.ScalarMappable(cmap=ctb)
+# Fake up the array of the scalar mappable
+sm._A = []
+ 
+# Set colorbar, aspect ratio
+cbar = plt.colorbar(sm, alpha=0.05, aspect=16, shrink=0.4)
+cbar.solids.set_edgecolor("face")
+# Remove colorbar container frame
+cbar.outline.set_visible(False)
+# Fontsize for colorbar ticklabels
+cbar.ax.tick_params(labelsize=16)
+# Customize colorbar tick labels
+mytks = range(0,100,10)
+cbar.set_ticks(mytks)
+cbar.ax.set_yticklabels([str(a) for a in mytks], alpha=a)
+ 
+# Colorbar label, customize fontsize and distance to colorbar
+cbar.set_label('Admittance Rate', alpha=a, 
+               rotation=270, fontsize=20, labelpad=20)
+# Remove color bar tick lines, while keeping the tick labels
+cbarytks = plt.getp(cbar.ax.axes, 'yticklines')
+plt.setp(cbarytks, visible=False)
+
+# Save figure in png with tight bounding box
+plt.savefig('Bay Area Colleges.pdf', bbox_inches='tight')
