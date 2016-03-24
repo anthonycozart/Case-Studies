@@ -25,11 +25,12 @@ type(zips_long.value)
 
 # split value variable, into separate columns for lat and for lon
 latlon = zips_long['value'].apply(lambda x: pd.Series(x.split(',')))
-latlon.columns = ['Lon','Lat']
+latlon.columns = ['GeoLon','GeoLat']
 
-zips_long['Lat'] = latlon['Lat']
-zips_long['Lon'] = latlon['Lon']
+zips_long['GeoLat'] = latlon['GeoLat']
+zips_long['GeoLon'] = latlon['GeoLon']
 
 zips_long.drop(['variable','value'],axis=1,inplace=True)
+zips_long.sort_values('postal_code',inplace=True)
 
 # zips_long now contains just postal code, lat, and lon
