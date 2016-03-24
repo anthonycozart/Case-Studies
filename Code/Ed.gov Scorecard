@@ -50,7 +50,7 @@ fig = plt.figure(figsize=(16,12))
 # Add a subplot
 ax = fig.add_subplot(111)
 # Set title
-ttl = 'Composite SAT Scores and Admittance Rates for SF Bay Area Colleges'
+ttl = 'Composite SAT Scores and Acceptance Rates for SF Bay Area Colleges'
 # Set color transparency (0: transparent; 1: solid)
 a = 0.7
 # Create a colormap
@@ -97,7 +97,7 @@ cbar.set_ticks(mytks)
 cbar.ax.set_yticklabels([str(a) for a in mytks], alpha=a)
  
 # Colorbar label, customize fontsize and distance to colorbar
-cbar.set_label('Admittance Rate', alpha=a, 
+cbar.set_label('Acceptance Rate', alpha=a, 
                rotation=270, fontsize=20, labelpad=20)
 # Remove color bar tick lines, while keeping the tick labels
 cbarytks = plt.getp(cbar.ax.axes, 'yticklines')
