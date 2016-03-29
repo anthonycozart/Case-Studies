@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style('whitegrid')
+%matplotlib inline
+
+from pandas.io.data import DataReader
+from datetime import datetime
+
+end = datetime.now()
+start = datetime(end.year-3,end.month,end.day)
+
+tickers = ['VRX']
+for stock in tickers:
+    globals()[stock] = DataReader(stock,'yahoo',start,end)
+
+VRX.drop(['Open', 'High', 'Low', 'Close'],axis=1,inplace=True)
+
+VRX['Adj Close'].plot(legend=True,figsize=(12,9))
+plt.ylabel('Stock Price (in USD)')
+plt.xlabel('Date')
+plt.title('Valeant Stock Price since March 2013')
+
+# Successful acquisitions
+# Bosch & Lomb
+plt.axvline(x="5/27/2013", linewidth=1, color='blue')
+# Endo
+plt.axvline(x="3/16/2015", linewidth=1, color='blue')
+
+# Failed Acquisitions
+# Actavis
+plt.axvline(x="4/27/2013", linewidth=1, color='red')
+# Allergan
+plt.axvline(x="4/21/2014", linewidth=1, color='red')
+# Allergan
+plt.axvline(x="5/30/2014", linewidth=1, color='red')
+# Allergan
+plt.axvline(x="10/27/2014", linewidth=1, color='red')
+
+# News
+# exit by ValueAct Capital, June 2015
+plt.axvspan("6/1/2015","6/30/2015", color='grey', alpha=0.5, lw=0)
+# subpoenaed by U.S. prosecutors 
+plt.axvline(x="10/15/2015", linewidth=1, color='grey')
+# New York Times reports of ties with specialty pharmacy Philidor
+plt.axvline(x="10/19/2015", linewidth=1, color='grey')
+# Allegations by Citron Research of financial irregularities relating to Philidor
+plt.axvline(x="10/21/2015", linewidth=1, color='grey')
+
+plt.savefig('vrx_stock_price.pdf', bbox_inches='tight')
+
+# http://dealbook.nytimes.com/2013/04/27/valeant-and-actavis-talks-fall-through-for-now/
+# http://www.nytimes.com/interactive/2014/11/18/business/dealbook/18allergan-timeline.html#/#time355_10528
+# http://dealbook.nytimes.com/2014/04/21/valeants-history-of-deal-making/
+# http://www.wsj.com/articles/valeant-raises-salix-offer-price-1426507294
