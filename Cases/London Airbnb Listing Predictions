@@ -1,0 +1,105 @@
+import pandas as pd
+import numpy as np
+listings = pd.read_csv('london_listings.csv')
+
+# grab variables of interest
+
+text_vars = ['name','summary','space','description','neighborhood_overview','notes','transit','amenities']
+cat_vars = ['experiences_offered','host_is_superhost','neighbourhood_cleansed','city','market','property_type','room_type','instant_bookable','cancellation_policy']
+cont_vars = ['accommodates','bathrooms','bedrooms','beds','minimum_nights','maximum_nights']
+price_vars = ['price','weekly_price','monthly_price','security_deposit','cleaning_fee']
+# review_vars = []
+all_vars = text_vars + cat_vars + cont_vars + price_vars
+
+dframe = listings[all_vars]
+
+#### Create matrix of covariates (for regressions) ####
+
+# create dummies for each amenity in amenities string variable
+def find_needle(n,h):
+    if n in h:
+        return 1
+    else:
+        return 0
+
+amenities_vars = ['TV',"Wireless Internet",'Kitchen',"Free Parking on Premises",'Breakfast','Heating','Washer','Dryer',"Cable TV","Family/Kid Friendly","Indoor Fireplace","Pets Allowed",'Gym',"24-Hour Check-in"]
+for item in amenities_vars:
+    dframe[item] = dframe.apply(lambda x: find_needle(item, x['amenities']), axis=1)
+
+# create indicators for categorical variables, including neighborhood
+categorical_vars = ['experiences_offered','host_is_superhost','property_type','room_type','instant_bookable','cancellation_policy']
+base_categories = []
+dummy_list = []
+
+for item in categorical_vars:
+    # set prefix
+    item_prefix = item[0:4]
+    item = pd.get_dummies(dframe[item], prefix=item_prefix)
+    # identify name of first column and add to list of base categories
+    col_names = item.columns.tolist()
+    base_categories.append(col_names[0])
+    # drop first column
+	item.drop(item.columns[0],axis=1,inplace=True)
+	# add item name to dummy list
+	dummy_list.append(item)
+
+# do this separately for neighborhood, picking Islington as the base category
+neighborhood = pd.get_dummies(dframe['neighbourhood_cleansed'], prefix='location')
+base_categories.append('location_Islington')
+neighborhood.drop(['location_Islington'],axis=1,inplace=True)
+dummy_list.append(neighborhood)
+
+# combine dataframes of indicators
+from functools import reduce
+dummies = reduce(lambda left,right: pd.merge(left,right,left_index=True, right_index=True), dummy_list)
+
+# create covariate matrix of indicators
+from_df = cont_vars + amenities_vars
+# append price
+from_df.append('price')
+covariates = dframe[from_df]
+covariates = pd.merge(covariates,dummies,left_index=True, right_index=True)
+
+# drop if missing
+covariates.dropna(axis=0,inplace=True)
+
+
+#### Format dependent variable (Prices) ####
+# convert price variable from string (with $ and ,) to float
+from re import sub
+from decimal import Decimal
+
+def price_cleaner(price):
+	clean = Decimal(sub(r'[^\d.]', '', price))
+	return clean
+
+covariates['price']=covariates['price'].apply(price_cleaner).astype(float)
+price = covariates['price']
+covariates.drop(['price'],axis=1,inplace=True)
+
+# calculate minimum price, using minimum number of nights and cleaning fee
+# dframe['cleaning_fee'].fillna(0, inplace=True)
+# minimum_cost = (dframe['minimum_nights']*dframe['price']) + dframe['cleaning_fee']
+
+
+#### linear regression ####
+import sklearn
+from sklearn.linear_model import LinearRegression
+
+lreg = LinearRegression()
+lreg.fit(covariates,price)
+lreg.score(covariates,price)
+
+coeff_df = pd.DataFrame(covariates.columns)
+coeff_df.columns = ['Features']
+coeff_df["Coefficient Estimate"] = pd.Series(lreg.coef_)
+coeff_df.to_csv('OLS_estimates.csv',float_format='%.4f')
+
+# random forest regression
+from sklearn.ensemble import RandomForestRegressor
+rfr = RandomForestRegressor(100)
+rfr.fit(x[:, None], y)
+
+
+
+
