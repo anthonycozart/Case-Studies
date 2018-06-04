@@ -1,3 +1,3 @@
-# Ideas, code, & case studies
+# Old iddeas, code, & case studies
 
-Including from Wisconsin, Yale, consulting work, and personal interests
+Some of the first lines of python and R I wrote, on case studies and research ideas during 2013-2016.
